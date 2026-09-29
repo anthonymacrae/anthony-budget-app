@@ -236,4 +236,6 @@ function resetApp(){if(confirm('Reset all months, goals and entries on this devi
 function toggleHelper(){document.getElementById('helperPanel').classList.toggle('open')}
 function askBuddy(){let q=document.getElementById('helperQuestion').value.trim();if(!q){alert('Type a question first.');return}let full='I am using a personal budget app. Please help me with this question: '+q;window.open('https://chatgpt.com/?q='+encodeURIComponent(full),'_blank');}
 localStorage.setItem(STORAGE,JSON.stringify(store));monthOptions();render();
-</script></body></html>
+</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js').catch(error=>console.error('Service worker registration failed:',error));});}</script>
+</body></html>
