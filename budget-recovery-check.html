@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Budget Recovery Check</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#172033;background:#f3f6fb}body{margin:0;padding:18px;line-height:1.5}.wrap{max-width:720px;margin:auto}.panel{background:white;border:1px solid #dce3ee;border-radius:16px;padding:18px;margin:0 0 14px}h1{font-size:1.5rem;margin:0 0 8px}h2{font-size:1.1rem;margin:0 0 8px}.muted{color:#596579;font-size:.92rem}.result{padding:12px;border-radius:10px;background:#f3f6fb;margin:8px 0;overflow-wrap:anywhere}button{border:0;border-radius:10px;background:#2457d6;color:white;font:inherit;font-weight:700;padding:12px 15px;margin:5px 6px 5px 0}button.secondary{background:white;color:#172033;border:1px solid #dce3ee}.warning{background:#fff1cf;border:1px solid #e6c76f;padding:12px;border-radius:10px}.good{background:#e1f6e9}.bad{background:#ffeaec}code{overflow-wrap:anywhere}
+</style>
+</head>
+<body><div class="wrap">
+<div class="panel">
+<h1>Budget Recovery Check</h1>
+<p>This page only checks the budget data saved in this browser on this device. It does <strong>not</strong> change, merge, or delete anything, and it does not send data anywhere.</p>
+<div class="warning"><strong>Important:</strong> Do not use Restore or Reset in the budget app while checking recovery.</div>
+</div>
+<div class="panel"><h2>Storage check</h2><div id="results">Checking saved data…</div><button id="exportOld" hidden>Export older saved data (JSON)</button><button id="exportCurrent" class="secondary" hidden>Export current saved data (JSON)</button><p class="muted">If older transactions are found, export the older saved data and keep that file. We can then plan a careful merge without overwriting your current budget.</p></div>
+</div>
+<script>
+(function(){
+ const oldKey='anthonyBudgetApp_v1';
+ const newKey='anthonyBudgetApp_v2';
+ const el=document.getElementById('results');
+ let oldData=null,newData=null;
+ try{oldData=JSON.parse(localStorage.getItem(oldKey)||'null')}catch(e){}
+ try{newData=JSON.parse(localStorage.getItem(newKey)||'null')}catch(e){}
+ function count(value){return Array.isArray(value)?value.length:0}
+ function monthSummary(store){
+   if(!store||!store.months||typeof store.months!=='object')return 'No month-based data found';
+   const keys=Object.keys(store.months).sort();
+   return keys.length?keys.map(k=>{
+     const m=store.months[k]||{};
+     return k+': '+count(m.transactions)+' transactions, '+count(m.receipts)+' receipts, '+count(m.payments)+' payment items';
+   }).join('<br>'):'No months found';
+ }
+ const oldExists=oldData!==null;
+ const oldTx=count(oldData&&oldData.transactions);
+ const oldMonthsTx=oldData&&oldData.months?Object.values(oldData.months).reduce((n,m)=>n+count(m&&m.transactions),0):0;
+ const currentMonthsTx=newData&&newData.months?Object.values(newData.months).reduce((n,m)=>n+count(m&&m.transactions),0):0;
+ let html='';
+ html+='<div class="result '+(oldExists?'good':'bad')+'"><strong>Older storage (v1):</strong> '+(oldExists?'Found':'Not found')+'</div>';
+ if(oldExists){
+   html+='<div class="result">Transactions directly in older storage: <strong>'+oldTx+'</strong><br>Transactions inside older month records: <strong>'+oldMonthsTx+'</strong><br>Top-level keys: <code>'+Object.keys(oldData).join(', ')+'</code></div>';
+   if(oldData.months)html+='<div class="result"><strong>Older month records</strong><br>'+monthSummary(oldData)+'</div>';
+ }
+ html+='<div class="result"><strong>Current storage (v2):</strong> '+(newData?'Found':'Not found')+'<br>Transactions across current months: <strong>'+currentMonthsTx+'</strong></div>';
+ if(newData&&newData.months)html+='<div class="result"><strong>Current month records</strong><br>'+monthSummary(newData)+'</div>';
+ html+='<p class="muted">These counts are read-only. They do not confirm that every missing transaction is recoverable, but they help identify whether an older copy remains.</p>';
+ el.innerHTML=html;
+ function download(name,obj){const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+ const oldBtn=document.getElementById('exportOld');
+ if(oldExists){oldBtn.hidden=false;oldBtn.onclick=()=>download('anthony-budget-older-storage-v1.json',oldData)}
+ const newBtn=document.getElementById('exportCurrent');
+ if(newData){newBtn.hidden=false;newBtn.onclick=()=>download('anthony-budget-current-storage-v2.json',newData)}
+})();
+</script>
+</body></html>
