@@ -105,6 +105,17 @@ function applyTheme(){const dark=localStorage.getItem(THEME_KEY)==='dark';docume
 function toggleTheme(){localStorage.setItem(THEME_KEY,document.body.classList.contains('dark')?'light':'dark');applyTheme();}
 applyTheme();
 let allocateFilter='pending';
+const graphSettings = {
+  type: 'bar',
+  metric: 'payments-category',
+  period: 'all',
+  category: 'all'
+};
+
+function updateGraphSetting(key, value) {
+  graphSettings[key] = value;
+  render('graphs');
+}
 function setAllocateFilter(f){allocateFilter=f;render('allocate')}
 function setTab(t){document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));render(t)}
 document.getElementById('nav').addEventListener('click',e=>{let b=e.target.closest('button');if(b)setTab(b.dataset.tab)});
@@ -140,13 +151,254 @@ file.addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;
 }else if(tab==='goals'){
 root.innerHTML=`<h2>Goals tracker</h2><p class="muted">Goals and contributions carry across every month. Record each time you move money into a savings account or pot.</p><div class="panel"><h3>＋ Create a goal</h3><div class="formgrid"><label>Goal title<input id="goalTitle" placeholder="e.g. Emergency fund"></label><label>Target amount (£)<input id="goalTarget" type="number" min="0.01" step=".01" placeholder="1000"></label><label class="full">Notes (optional)<input id="goalNotes" placeholder="What is this money for?"></label></div><div class="actions"><button class="primary" onclick="addGoal()">Create goal</button></div></div><div class="goalgrid">${store.goals.map((g,n)=>{let saved=goalSaved(g),target=Number(g.target)||0,percent=target?Math.min(100,saved/target*100):0;return `<div class="panel"><div class="itemtop"><div><h3>${esc(g.title)}</h3><div class="muted">${esc(g.notes||'Savings goal')}</div></div><button class="secondary" onclick="deleteGoal(${n})">Delete</button></div><div class="itemtop"><div><div class="muted">Saved so far</div><div class="metric positive">${money(saved)}</div></div><div style="text-align:right"><div class="muted">Still needed</div><div class="metric">${money(Math.max(0,target-saved))}</div></div></div><div class="goalchart"><div class="saved" style="width:${percent}%"></div><div class="left" style="width:${100-percent}%"></div></div><div class="muted">${percent.toFixed(1)}% of ${money(target)} reached</div><div class="actions"><button class="primary" onclick="addContribution(${n})">＋ Add contribution</button><button class="secondary" onclick="editGoal(${n})">Edit goal</button></div>${(g.contributions||[]).length?`<div class="history"><div class="muted"><b>Contribution history</b></div>${g.contributions.slice().reverse().map((c,rev)=>{let j=g.contributions.length-1-rev;return `<div class="historyrow"><div><b>${esc(c.date)}</b><div class="muted">${esc(c.notes||'Contribution')} · ${esc(c.month||'')}</div></div><div style="text-align:right"><b>${money(c.amount)}</b><br><button class="secondary" style="padding:4px 7px;margin-top:3px" onclick="deleteContribution(${n},${j})">Delete</button></div></div>`}).join('')}</div>`:'<div class="muted" style="margin-top:8px">No contributions recorded yet.</div>'}</div>`}).join('')||'<div class="empty">No goals yet. Create one above to get started.</div>'}</div>`;
 }else if(tab==='graphs'){
-let months=Object.keys(store.months).sort();let maxSpend=Math.max(1,...months.map(k=>store.months[k].payments.reduce((s,p)=>s+paidAmount(p),0)));
-root.innerHTML=`<h2>Graphs and progress</h2><div class="panel"><h3>Actual payments by month</h3>${months.map(k=>{let total=store.months[k].payments.reduce((s,p)=>s+paidAmount(p),0);return `<div style="margin:11px 0"><div class="itemtop"><span>${esc(monthLabel(k))}</span><b>${money(total)}</b></div><div class="bar"><span style="width:${total/maxSpend*100}%"></span></div></div>`}).join('')}</div><div class="panel"><h3>Income received vs payments made</h3>${months.map(k=>{let m=store.months[k],inc=m.receipts.reduce((s,r)=>s+(Number(r.actual)||0),0),out=m.payments.reduce((s,p)=>s+paidAmount(p),0),max=Math.max(1,inc,out);return `<div style="margin:12px 0"><b>${esc(monthLabel(k))}</b><div class="muted">Income received ${money(inc)}</div><div class="bar"><span style="width:${inc/max*100}%;background:var(--green)"></span></div><div class="muted" style="margin-top:6px">Payments made ${money(out)}</div><div class="bar"><span style="width:${out/max*100}%;background:var(--blue)"></span></div></div>`}).join('')}</div><div class="panel"><h3>Each savings goal</h3>${store.goals.map(g=>{let total=goalSaved(g),target=Number(g.target)||0,max=Math.max(1,target);return `<div style="margin:13px 0"><div class="itemtop"><b>${esc(g.title)}</b><span>${money(total)} / ${money(target)}</span></div><div class="bar"><span style="width:${Math.min(100,total/max*100)}%;background:var(--green)"></span></div><div class="muted">${money(Math.max(0,target-total))} remaining · ${(g.contributions||[]).length} contributions</div>${(g.contributions||[]).length?g.contributions.map(c=>`<div class="historyrow"><span>${esc(c.date)}</span><span>${money(c.amount)}</span></div>`).join(''):'<div class="muted">No contributions yet.</div>'}</div>`}).join('')||'<div class="empty">Add goals to see their progress here.</div>'}</div>`;
+
+}else if(tab==='graphs'){
+  const metrics = [
+    ['payments-category','Payments by account/category'],
+    ['payments-item','Payments by individual bill'],
+    ['income-source','Income by source'],
+    ['monthly-comparison','Income received vs payments made'],
+    ['budget-actual','Planned payments vs actual payments'],
+    ['transactions','Allocated transactions by budget item'],
+    ['goals','Savings goals']
+  ];
+
+  const records = graphRecords();
+  const categories = [...new Set(
+    graphRecords().map(r => r.label)
+  )];
+
+  const selectedMetric = graphSettings.metric;
+  const paired = ['monthly-comparison','budget-actual'].includes(selectedMetric);
+  const isGoals = selectedMetric === 'goals';
+
+  root.innerHTML = `
+    <h2>Graphs and progress</h2>
+    <p class="muted">Explore your income, spending, payments and savings using your saved budget data.</p>
+
+    <div class="panel">
+      <h3>Graph settings</h3>
+      <div class="formgrid">
+        <label>Information to display
+          <select onchange="updateGraphSetting('metric',this.value)">
+            ${metrics.map(([v,l])=>`<option value="${v}" ${selectedMetric===v?'selected':''}>${l}</option>`).join('')}
+          </select>
+        </label>
+
+        <label>Chart type
+          <select onchange="updateGraphSetting('type',this.value)">
+            ${[['bar','Bar chart'],['pie','Pie chart'],['doughnut','Doughnut chart'],['line','Line graph']].map(([v,l])=>`<option value="${v}" ${graphSettings.type===v?'selected':''}>${l}</option>`).join('')}
+          </select>
+        </label>
+
+        <label>Time period
+          <select onchange="updateGraphSetting('period',this.value)">
+            ${[['current','Working month only'],['3','Last 3 available months'],['6','Last 6 available months'],['12','Last 12 available months'],['all','All available months']].map(([v,l])=>`<option value="${v}" ${graphSettings.period===v?'selected':''}>${l}</option>`).join('')}
+          </select>
+        </label>
+
+        <label>Filter category
+          <select onchange="updateGraphSetting('category',this.value)">
+            <option value="all" ${graphSettings.category==='all'?'selected':''}>All categories</option>
+            ${categories.map(c=>`<option value="${esc(c)}" ${graphSettings.category===c?'selected':''}>${esc(c)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>${metrics.find(m=>m[0]===selectedMetric)?.[1] || 'Budget graph'}</h3>
+      ${paired ? '<p class="muted">For paired graphs, blue represents the first value and green represents the second value.</p>' : ''}
+      ${drawBudgetGraph(records)}
+    </div>
+
+    ${isGoals ? `
+      <div class="panel">
+        <h3>Savings goal progress</h3>
+        ${store.goals.map(g=>{
+          const saved=goalSaved(g);
+          const target=Number(g.target)||0;
+          const pct=target ? saved/target*100 : 0;
+          return `<div style="margin:20px 0">
+            <div class="itemtop">
+              <b>${esc(g.title)}</b>
+              <b>${Math.min(100,pct).toFixed(1)}%</b>
+            </div>
+            <div class="goalchart" style="height:24px">
+              <div class="saved" style="width:${Math.min(100,pct)}%"></div>
+              <div class="left" style="width:${Math.max(0,100-pct)}%"></div>
+            </div>
+            <div class="itemtop">
+              <span>${money(saved)} saved</span>
+              <span class="muted">Target ${money(target)}</span>
+            </div>
+            <div class="muted">${money(Math.max(0,target-saved))} remaining</div>
+          </div>`;
+        }).join('') || '<div class="empty">Create a savings goal in the Goals tracker first.</div>'}
+      </div>` : ''}
+  `;
+
 }else if(tab==='log'){
 root.innerHTML=`<h2>Money received · ${esc(monthLabel(current))}</h2><p class="muted">Record each wage payment or other money received.</p><div class="panel"><h3>Add a receipt</h3><div class="formgrid"><label>Date received<input id="rdate" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Income source<select id="rsource">${data.income.map(i=>`<option>${esc(i.source)}</option>`).join('')}<option>Other</option></select></label><label>Expected (£)<input id="rexpected" type="number" min="0" step=".01" placeholder="0.00"></label><label>Actually received (£)<input id="ractual" type="number" min="0" step=".01" placeholder="0.00"></label><label class="full">Notes (optional)<input id="rnotes" placeholder="e.g. extra shift"></label></div><button class="primary" style="margin-top:5px" onclick="addReceipt()">Save receipt</button></div><div class="panel"><h3>Receipt history</h3>${data.receipts.length?data.receipts.slice().reverse().map((r,rev)=>{let n=data.receipts.length-1-rev;return `<div class="item"><div class="itemtop"><div><b>${esc(r.source)}</b><div class="muted">${esc(r.date)} ${r.notes?'· '+esc(r.notes):''}</div></div><b>${money(r.actual)}</b></div><div class="muted">Expected ${money(r.expected)} · Difference ${money((Number(r.actual)||0)-(Number(r.expected)||0))}</div><button class="secondary" style="margin-top:7px" onclick="deleteReceipt(${n})">Delete entry</button></div>`}).join(''):'<div class="empty">No receipts recorded yet.</div>'}</div>`;
 }else if(tab==='settings'){
 root.innerHTML=`<h2>Backup & settings</h2><div class="panel"><h3>Appearance</h3><p class="muted">Choose the display that is most comfortable to read. Your choice is saved on this device.</p><button class="primary" onclick="toggleTheme()">☼ Switch light / dark mode</button></div><div class="panel"><h3>Keep your data safe</h3><p class="muted">All months, payment histories and goals are stored in this browser on this device. They do not automatically sync to another device. Export a backup regularly.</p><div class="actions"><button class="primary" onclick="backup()">Export full backup (JSON)</button><button class="secondary" onclick="exportCSV()">Export this month's receipts (CSV)</button></div><div style="margin-top:16px"><label class="muted">Restore a previous JSON backup<input type="file" id="restoreFile" accept=".json,application/json" style="display:block;margin-top:6px"></label><button class="secondary" style="margin-top:8px" onclick="restore()">Restore backup</button></div></div><div class="panel"><h3>Reset app</h3><p class="muted">This clears saved data in this app. Export a backup first if you want to keep it.</p><button class="secondary" onclick="resetApp()">Reset all data</button></div>`;
 }
+}
+
+function graphMonths() {
+  const keys = Object.keys(store.months).sort();
+  if (graphSettings.period === 'current') return keys.includes(current) ? [current] : [];
+  if (graphSettings.period === '3') return keys.slice(-3);
+  if (graphSettings.period === '6') return keys.slice(-6);
+  if (graphSettings.period === '12') return keys.slice(-12);
+  return keys;
+}
+
+function graphRecords() {
+  const keys = graphMonths();
+  const records = [];
+
+  keys.forEach(k => {
+    const m = store.months[k];
+    const label = monthLabel(k);
+
+    if (graphSettings.metric === 'payments-category' ||
+        graphSettings.metric === 'payments-item') {
+      const groups = {};
+      m.payments.forEach(p => {
+        const name = graphSettings.metric === 'payments-item'
+          ? p.name : (p.account || 'Uncategorised');
+        groups[name] = (groups[name] || 0) + paidAmount(p);
+      });
+      Object.entries(groups).forEach(([name, value]) =>
+        records.push({label: name, value, month: k, monthLabel: label})
+      );
+    }
+
+    if (graphSettings.metric === 'income-source') {
+      const groups = {};
+      m.receipts.forEach(r => {
+        groups[r.source || 'Other'] =
+          (groups[r.source || 'Other'] || 0) + (Number(r.actual) || 0);
+      });
+      Object.entries(groups).forEach(([name, value]) =>
+        records.push({label: name, value, month: k, monthLabel: label})
+      );
+    }
+
+    if (graphSettings.metric === 'monthly-comparison') {
+      records.push({
+        label,
+        value: m.receipts.reduce((s, r) => s + (Number(r.actual) || 0), 0),
+        second: m.payments.reduce((s, p) => s + paidAmount(p), 0),
+        month: k,
+        monthLabel: label
+      });
+    }
+
+    if (graphSettings.metric === 'budget-actual') {
+      records.push({
+        label,
+        value: m.payments
+          .filter(p => p.include === 'Include' && p.status !== 'Cancelled')
+          .reduce((s, p) => s + (Number(p.amount) || 0), 0),
+        second: m.payments.reduce((s, p) => s + paidAmount(p), 0),
+        month: k,
+        monthLabel: label
+      });
+    }
+
+    if (graphSettings.metric === 'transactions') {
+      const groups = {};
+      (m.transactions || []).filter(t => t.allocated).forEach(t => {
+        const name = t.allocationLabel || 'Other';
+        groups[name] = (groups[name] || 0) + Math.abs(Number(t.amount) || 0);
+      });
+      Object.entries(groups).forEach(([name, value]) =>
+        records.push({label: name, value, month: k, monthLabel: label})
+      );
+    }
+  });
+
+  if (graphSettings.metric === 'goals') {
+    store.goals.forEach(g => records.push({
+      label: g.title,
+      value: goalSaved(g),
+      second: Number(g.target) || 0
+    }));
+  }
+
+  return records.filter(r => graphSettings.category === 'all' ||
+    r.label === graphSettings.category);
+}
+
+function drawBudgetGraph(records) {
+  const type = graphSettings.type;
+  const paired = ['monthly-comparison', 'budget-actual'].includes(graphSettings.metric);
+  const moneyValue = n => money(n || 0);
+  const colours = ['#2457d6','#087847','#7045b8','#d97706',
+                   '#b42332','#0891b2','#64748b','#db2777'];
+
+  if (!records.length) {
+    return '<div class="empty">No data available for this selection yet.</div>';
+  }
+
+  if (type === 'pie' || type === 'doughnut') {
+    const pieRecords = records.filter(r => r.value > 0);
+    const total = pieRecords.reduce((s, r) => s + r.value, 0);
+    if (!total) return '<div class="empty">No positive values to chart.</div>';
+
+    let angle = 0;
+    const slices = pieRecords.map((r, i) => {
+      const start = angle;
+      angle += r.value / total * 360;
+      return `${colours[i % colours.length]} ${start}deg ${angle}deg`;
+    });
+    const stops = slices.join(', ');
+    const hole = type === 'doughnut' ? '50%' : '0%';
+
+    return `<div style="display:flex;flex-wrap:wrap;gap:22px;align-items:center;justify-content:center;padding:15px 0">
+      <div style="width:min(230px,65vw);aspect-ratio:1;border-radius:50%;background:conic-gradient(${stops});position:relative">
+        ${type === 'doughnut' ? `<div style="position:absolute;inset:25%;border-radius:50%;background:var(--card);display:grid;place-items:center;text-align:center;padding:5px"><div><b>${moneyValue(total)}</b><div class="muted">Total</div></div></div>` : ''}
+      </div>
+      <div style="flex:1;min-width:160px">
+        ${pieRecords.map((r,i)=>`<div class="historyrow" style="align-items:center">
+          <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${colours[i % colours.length]};margin-right:7px"></span>${esc(r.label)}</span>
+          <b>${moneyValue(r.value)}</b>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  if (type === 'line') {
+    const values = records.map(r => r.value);
+    const max = Math.max(1, ...values, ...(paired ? records.map(r => r.second || 0) : []));
+    const width = 600, height = 240, pad = 35;
+    const x = i => records.length < 2 ? width / 2 :
+      pad + i * (width - pad * 2) / (records.length - 1);
+    const y = v => height - pad - (v / max) * (height - pad * 2);
+    const points = vals => vals.map((v,i) => `${x(i)},${y(v)}`).join(' ');
+
+    return `<div style="overflow-x:auto">
+      <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Line chart" style="width:100%;min-width:300px;display:block">
+        ${[0,.25,.5,.75,1].map(f=>`<line x1="${pad}" y1="${y(max*f)}" x2="${width-pad}" y2="${y(max*f)}" stroke="var(--line)" stroke-width="1"/>`).join('')}
+        <polyline points="${points(values)}" fill="none" stroke="#2457d6" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+        ${records.map((r,i)=>`<circle cx="${x(i)}" cy="${y(r.value)}" r="4" fill="#2457d6"><title>${esc(r.label)}: ${moneyValue(r.value)}</title></circle>`).join('')}
+        ${paired ? `<polyline points="${points(records.map(r=>r.second||0))}" fill="none" stroke="#087847" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+        ${records.map((r,i)=>`<text x="${x(i)}" y="${height-8}" fill="var(--muted)" font-size="11" text-anchor="middle">${esc((r.label || '').slice(0,10))}</text>`).join('')}
+      </svg>
+      ${paired ? '<p class="muted"><span style="color:#2457d6">● First value</span> &nbsp; <span style="color:#087847">● Second value</span></p>' : ''}
+      ${records.map(r=>`<div class="historyrow"><span>${esc(r.label)}</span><b>${moneyValue(r.value)}${paired ? ' / '+moneyValue(r.second) : ''}</b></div>`).join('')}
+    </div>`;
+  }
+
+  const max = Math.max(1, ...records.map(r => Math.max(r.value || 0, paired ? r.second || 0 : 0)));
+  return records.map(r => `
+    <div style="margin:15px 0">
+      <div class="itemtop"><b>${esc(r.label)}</b><span>${moneyValue(r.value)}${paired ? ' / '+moneyValue(r.second) : ''}</span></div>
+      <div class="bar"><span style="width:${Math.max(0,Math.min(100,(r.value || 0)/max*100))}%"></span></div>
+      ${paired ? `<div class="bar"><span style="width:${Math.max(0,Math.min(100,(r.second || 0)/max*100))}%;background:var(--green)"></span></div>` : ''}
+    </div>`).join('');
 }
 
 let pendingCsvText='';
