@@ -114,6 +114,12 @@ const graphSettings = {
 
 function updateGraphSetting(key, value) {
   graphSettings[key] = value;
+
+  // Reset the category filter when changing graph type
+  if (key === 'metric') {
+    graphSettings.category = 'all';
+  }
+
   render('graphs');
 }
 function setAllocateFilter(f){allocateFilter=f;render('allocate')}
