@@ -54,7 +54,55 @@ function emp(e){return types[e.kind]?.emp||''}
 function payday(e){let employer=emp(e);if(!employer)return null;let d=new Date(e.date+'T12:00:00');if(employer==='falcon'){let x=new Date(d.getFullYear(),d.getMonth()+1,0);while(x.getDay()!==5)x.setDate(x.getDate()-1);return iso(x)}if(employer==='voyage')return iso(new Date(d.getFullYear(),d.getMonth()+1,15));let monday=new Date(d);monday.setDate(monday.getDate()-((monday.getDay()+6)%7));monday.setDate(monday.getDate()+15);return iso(monday)}
 function pay(e){if(e.kind==='sleepin'){let a=e.sleepAmount!=null&&e.sleepAmount!==''?Number(e.sleepAmount):Number(state.settings.sleepinAmount);if(a>0)return {gross:a,net:a*(1-Number(state.settings.deduction)/100),unknown:false};return {gross:0,net:0,unknown:true}}let employer=emp(e);if(!employer||!Number(e.hours))return {gross:0,net:0,unknown:false};let g=Number(e.hours)*Number(e.rate||13.5);return {gross:g,net:g*(1-Number(state.settings.deduction)/100),unknown:false}}
 function renderCalendar(){let y=month.getFullYear(),m=month.getMonth();$('monthTitle').textContent=month.toLocaleDateString('en-GB',{month:'long',year:'numeric'});let first=new Date(y,m,1),start=new Date(y,m,1-((first.getDay()+6)%7));if(calView==='week'){let sd=new Date(selected+'T12:00:00');start=new Date(sd);start.setDate(sd.getDate()-((sd.getDay()+6)%7));}else if(calView==='day'){start=new Date(selected+'T12:00:00');}let count=calView==='month'?42:calView==='week'?7:1;let html=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(x=>'<div class="weekday">'+x+'</div>').join('');for(let i=0;i<count;i++){let d=new Date(start);d.setDate(start.getDate()+i);let ds=iso(d),evs=state.events.filter(e=>e.date===ds).sort((a,b)=>(a.start||'').localeCompare(b.start||''));html+='<div class="day '+(d.getMonth()!==m?'out ':'')+(ds===iso(now)?'today':'')+'" data-date="'+ds+'"><div class="daynum">'+d.getDate()+'</div>'+evs.slice(0,3).map(e=>'<button class="chip '+(types[e.kind]?.cls||'')+'" data-edit="'+e.id+'">'+esc((e.start?e.start+' ':'')+e.title)+'</button>').join('')+(evs.length>3?'<div class="small muted">+'+(evs.length-3)+'</div>':'')+'</div>'}$('calendar').innerHTML=html;$('calendar').querySelectorAll('.day').forEach(d=>d.addEventListener('click',e=>{if(e.target.closest('[data-edit]'))return;selected=d.dataset.date;renderDay();$('edate').value=selected}));$('calendar').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openEvent(b.dataset.edit)}));renderDay();renderStats();renderPaydays();renderClashes();renderFreeTime()}
-function renderClashes(){let overlaps=[];const es=state.events.slice().sort((a,b)=>(a.date+(a.start||'')).localeCompare(b.date+(b.start||'')));const mins=t=>{let [h,m]=t.split(':').map(Number);return h*60+m};for(let i=0;i<es.length;i++)for(let j=i+1;j<es.length;j++){if(es[j].date>es[i].date)break;if(es[i].date!==es[j].date||!es[i].start||!es[i].end||!es[j].start||!es[j].end)continue;let a=mins(es[i].start),ae=mins(es[i].end),b=mins(es[j].start),be=mins(es[j].end);if(ae<=a)ae+=1440;if(be<=b)be+=1440;if(Math.max(a,b)<Math.min(ae,be))overlaps.push(esc(es[i].title)+' overlaps '+esc(es[j].title)+' on '+fmt(es[i].date));}$('clashAlerts').innerHTML=overlaps.length?'<div class="clash"><strong>⚠ Possible clashes</strong><br>'+overlaps.slice(0,3).join('<br>')+'</div>':''}
+function renderClashes() {
+  const overlaps = [];
+
+  const events = state.events
+    .filter(e => e.date && e.start && e.end)
+    .map(e => {
+      const minutes = time => {
+        const [h, m] = time.split(':').map(Number);
+        return h * 60 + m;
+      };
+
+      const day = Math.floor(
+        new Date(e.date + 'T00:00:00').getTime() / 86400000
+      );
+
+      const start = day * 1440 + minutes(e.start);
+      let end = day * 1440 + minutes(e.end);
+
+      // An end time at or before the start means the shift
+      // continues into the following day.
+      if (end <= start) end += 1440;
+
+      return { ...e, _start: start, _end: end };
+    })
+    .sort((a, b) => a._start - b._start);
+
+  for (let i = 0; i < events.length; i++) {
+    for (let j = i + 1; j < events.length; j++) {
+      if (events[j]._start >= events[i]._end) break;
+
+      if (
+        Math.max(events[i]._start, events[j]._start) <
+        Math.min(events[i]._end, events[j]._end)
+      ) {
+        overlaps.push(
+          events[i].title + ' overlaps ' +
+          events[j].title + ' (' +
+          events[i].date + ' / ' + events[j].date + ')'
+        );
+      }
+    }
+  }
+
+  $('clashAlerts').innerHTML = overlaps.length
+    ? '<div class="clash"><strong>⚠ Possible clashes</strong><br>' +
+      overlaps.slice(0, 5).map(esc).join('<br>') +
+      '</div>'
+    : '';
+}
 function renderFreeTime(){let booked=new Set(state.events.map(e=>e.date)),d=new Date(now);while(booked.has(iso(d))&&d<new Date(now.getFullYear(),now.getMonth()+3,1))d.setDate(d.getDate()+1);$('freeTime').innerHTML='<div class="freebox">🌿 Next day with no scheduled events: <strong>'+fmt(iso(d))+'</strong></div>'}
 function renderDay(){let evs=state.events.filter(e=>e.date===selected).sort((a,b)=>(a.start||'').localeCompare(b.start||''));$('dayEvents').innerHTML='<div class="between"><strong>'+fmt(selected)+'</strong><button class="btn secondary" id="addSelected">+ Add here</button></div>'+(evs.length?evs.map(e=>{let p=pay(e);return '<div class="item"><div class="grow"><strong>'+esc(e.title)+'</strong><div class="small muted">'+esc(e.start||'')+(e.end?'–'+esc(e.end):'')+' · '+esc(types[e.kind]?.label||'Event')+'</div>'+(emp(e)?'<div class="small">Gross '+(p.unknown?'sleep-in amount unknown':money(p.gross))+' · estimated net '+(p.unknown?'—':money(p.net))+'</div>':'')+'</div><button class="btn secondary" data-edit="'+e.id+'">Edit</button></div>'}).join(''):'<div class="empty">No events on this date.</div>');$('addSelected').onclick=()=>openEvent();$('dayEvents').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEvent(b.dataset.edit))}
 function renderStats(){let mo=monthISO(month),evs=state.events.filter(e=>e.date.startsWith(mo)&&emp(e)),g=0,n=0,u=0;evs.forEach(e=>{let p=pay(e);if(p.unknown)u++;else{g+=p.gross;n+=p.net}});$('stats').innerHTML=[['Shifts',evs.length],['Shift gross',money(g)],['Estimated net',money(n)],['Unpriced sleep-ins',u]].map(x=>'<div class="stat"><div class="label">'+x[0]+'</div><strong>'+x[1]+'</strong></div>').join('')}
