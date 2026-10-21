@@ -610,5 +610,48 @@ localStorage.setItem(STORAGE,JSON.stringify(store));monthOptions();render();
   };
 })();
         </script>  
+  <script>
+(function(){
+  const btn = document.createElement('button');
+
+  btn.id = 'backToTopBtn';
+  btn.innerHTML = '↑';
+  btn.title = 'Back to top';
+  btn.setAttribute('aria-label','Back to top');
+
+  btn.style.cssText = `
+    position:fixed;
+    right:20px;
+    bottom:105px;
+    width:56px;
+    height:56px;
+    border-radius:50%;
+    border:2px solid rgba(255,255,255,.8);
+    background:var(--blue);
+    color:white;
+    font-size:28px;
+    font-weight:bold;
+    box-shadow:0 4px 14px rgba(0,0,0,.25);
+    z-index:9999;
+    cursor:pointer;
+    display:none;
+    align-items:center;
+    justify-content:center;
+  `;
+
+  document.body.appendChild(btn);
+
+  btn.addEventListener('click',function(){
+    window.scrollTo({
+      top:0,
+      behavior:'smooth'
+    });
+  });
+
+  window.addEventListener('scroll',function(){
+    btn.style.display = window.scrollY > 300 ? 'flex' : 'none';
+  });
+})();
+  </script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js').catch(error=>console.error('Service worker registration failed:',error));});}</script>
 </body></html>
