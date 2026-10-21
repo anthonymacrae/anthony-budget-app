@@ -798,5 +798,130 @@ localStorage.setItem(STORAGE,JSON.stringify(store));monthOptions();render();
   };
 })();
   </script>
+  <script>
+(function(){
+  const oldRender = window.render;
+  if(!oldRender) return;
+
+  let paymentFilter = 'all';
+
+  window.render = function(tab){
+    oldRender(tab);
+
+    if(tab !== 'payments') return;
+
+    const root = document.getElementById('root');
+    if(!root) return;
+
+    const search = document.getElementById('paymentSearch');
+    const jump = document.getElementById('paymentJump');
+
+    if(!search || !jump) return;
+
+    if(document.getElementById('paymentFilterBar')){
+      return;
+    }
+
+    const bar = document.createElement('div');
+    bar.id = 'paymentFilterBar';
+
+    bar.style.cssText =
+      'display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 15px;';
+
+    const filters = [
+      ['all','💷 All'],
+      ['outstanding','🔴 Outstanding'],
+      ['paid','🟢 Paid']
+    ];
+
+    function updateButtons(){
+      bar.querySelectorAll('button').forEach(function(button){
+        const active = button.dataset.filter === paymentFilter;
+
+        button.style.background = active
+          ? 'var(--blue)'
+          : 'var(--card)';
+
+        button.style.color = active
+          ? 'white'
+          : 'var(--ink)';
+      });
+    }
+
+    filters.forEach(function(item){
+
+      const button = document.createElement('button');
+
+      button.type = 'button';
+      button.dataset.filter = item[0];
+      button.textContent = item[1];
+
+      button.style.cssText =
+        'padding:10px 6px;border:1px solid var(--line);' +
+        'border-radius:10px;background:var(--card);' +
+        'color:var(--ink);font:inherit;font-size:.82rem;' +
+        'font-weight:750;';
+
+      button.addEventListener('click',function(){
+        paymentFilter = this.dataset.filter;
+        updateFilters();
+        updateButtons();
+      });
+
+      bar.appendChild(button);
+    });
+
+    jump.insertAdjacentElement('afterend',bar);
+
+    function updateFilters(){
+
+      const term = search.value.toLowerCase().trim();
+
+      const cards = root.querySelectorAll('.payment-card');
+
+      cards.forEach(function(card){
+
+        const text = card.innerText.toLowerCase();
+
+        const matchesSearch =
+          !term || text.includes(term);
+
+        const amountText = card.innerText;
+
+        const paidMatch =
+          amountText.match(/Paid so far:\s*£([\d,.]+)/i);
+
+        const leftMatch =
+          amountText.match(/£([\d,.]+)\s*left to pay/i);
+
+        const paid = paidMatch
+          ? parseFloat(paidMatch[1].replace(/,/g,''))
+          : 0;
+
+        const left = leftMatch
+          ? parseFloat(leftMatch[1].replace(/,/g,''))
+          : 0;
+
+        const isPaid = left <= 0 && paid > 0;
+
+        const matchesFilter =
+          paymentFilter === 'all' ||
+          (paymentFilter === 'paid' && isPaid) ||
+          (paymentFilter === 'outstanding' && !isPaid);
+
+        card.style.display =
+          matchesSearch && matchesFilter
+            ? ''
+            : 'none';
+      });
+    }
+
+    search.addEventListener('input',updateFilters);
+
+    updateFilters();
+    updateButtons();
+  };
+})();
+  </script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js').catch(error=>console.error('Service worker registration failed:',error));});}</script>
 </body></html>
