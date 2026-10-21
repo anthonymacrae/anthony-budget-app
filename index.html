@@ -523,7 +523,7 @@ localStorage.setItem(STORAGE,JSON.stringify(store));monthOptions();render();
 
           search.addEventListener('input',function(){
             const term = this.value.toLowerCase().trim();
-            root.querySelectorAll('.item').forEach(function(item){
+            root.querySelectorAll('.payment-entry').forEach(function(item){
               item.style.display =
                 !term || item.innerText.toLowerCase().includes(term)
                   ? ''
