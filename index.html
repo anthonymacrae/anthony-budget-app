@@ -536,6 +536,79 @@ localStorage.setItem(STORAGE,JSON.stringify(store));monthOptions();render();
   };
 })();
 </script>
-  
+<script>
+(function(){
+  const oldRender = window.render;
+  if(!oldRender) return;
+
+  window.render = function(tab){
+    oldRender(tab);
+
+    if(tab === 'payments'){
+      const root = document.getElementById('app');
+      if(!root) return;
+
+      const panel = root.querySelector('.panel');
+      const search = document.getElementById('paymentSearch');
+
+      if(!panel || !search) return;
+
+      const entries = root.querySelectorAll('.payment-entry');
+
+      entries.forEach((el,i)=>{
+        el.id = 'payment-jump-' + i;
+      });
+
+      if(document.getElementById('paymentJump')) return;
+
+      const wrap = document.createElement('div');
+      wrap.style.cssText =
+        'margin:0 0 15px;display:flex;gap:8px;align-items:center;';
+
+      const select = document.createElement('select');
+      select.id = 'paymentJump';
+      select.style.cssText =
+        'width:100%;padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--ink);font:inherit;';
+
+      const first = document.createElement('option');
+      first.value = '';
+      first.textContent = '💷 Jump to a payment...';
+      select.appendChild(first);
+
+      data.payments.forEach((p,i)=>{
+        const option = document.createElement('option');
+        option.value = 'payment-jump-' + i;
+        option.textContent = p.name || 'Unnamed payment';
+        select.appendChild(option);
+      });
+
+      select.addEventListener('change',function(){
+        if(!this.value) return;
+
+        const target = document.getElementById(this.value);
+
+        if(target){
+          target.scrollIntoView({
+            behavior:'smooth',
+            block:'start'
+          });
+
+          target.style.outline = '3px solid var(--blue)';
+
+          setTimeout(()=>{
+            target.style.outline = '';
+          },1500);
+        }
+
+        this.value = '';
+      });
+
+      wrap.appendChild(select);
+
+      search.insertAdjacentElement('afterend',wrap);
+    }
+  };
+})();
+        </script>  
 <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js').catch(error=>console.error('Service worker registration failed:',error));});}</script>
 </body></html>
