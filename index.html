@@ -922,6 +922,45 @@ localStorage.setItem(STORAGE,JSON.stringify(store));monthOptions();render();
     updateButtons();
   };
 })();
+    <script>
+(function(){
+  const jump = document.getElementById('paymentJump');
+  if(!jump) return;
+
+  jump.addEventListener('change', function(){
+    const value = this.value;
+    if(!value) return;
+
+    const root = document.getElementById('payments');
+    if(!root) return;
+
+    const cards = root.querySelectorAll('.payment-card');
+
+    cards.forEach(function(card){
+      const text = card.innerText.toLowerCase();
+
+      if(text.includes(value.toLowerCase())){
+        card.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+
+        card.style.transition = 'box-shadow 0.3s ease';
+
+        const oldShadow = card.style.boxShadow;
+
+        card.style.boxShadow = '0 0 0 4px rgba(37,99,235,0.35)';
+
+        setTimeout(function(){
+          card.style.boxShadow = oldShadow;
+        }, 1500);
+      }
+    });
+
+    this.value = '';
+  });
+})();
+</script>
   </script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js').catch(error=>console.error('Service worker registration failed:',error));});}</script>
 </body></html>
