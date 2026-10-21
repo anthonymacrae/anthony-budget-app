@@ -497,5 +497,45 @@ function toggleHelper(){document.getElementById('helperPanel').classList.toggle(
 function askBuddy(){let q=document.getElementById('helperQuestion').value.trim();if(!q){alert('Type a question first.');return}let full='I am using a personal budget app. Please help me with this question: '+q;window.open('https://chatgpt.com/?q='+encodeURIComponent(full),'_blank');}
 localStorage.setItem(STORAGE,JSON.stringify(store));monthOptions();render();
 </script>
+<script>
+(function(){
+  const oldRender = window.render;
+  if(!oldRender) return;
+
+  window.render = function(tab){
+    oldRender(tab);
+
+    if(tab === 'payments'){
+      const root = document.getElementById('root');
+      if(!root) return;
+
+      if(!document.getElementById('paymentSearch')){
+        const h2 = root.querySelector('h2');
+        if(h2){
+          const search = document.createElement('input');
+          search.id = 'paymentSearch';
+          search.type = 'search';
+          search.placeholder = '🔎 Search payments...';
+          search.style.cssText =
+            'width:100%;padding:12px;margin:0 0 15px;border-radius:10px;border:1px solid #999;font-size:16px;box-sizing:border-box;';
+
+          h2.insertAdjacentElement('afterend',search);
+
+          search.addEventListener('input',function(){
+            const term = this.value.toLowerCase().trim();
+            root.querySelectorAll('.item').forEach(function(item){
+              item.style.display =
+                !term || item.innerText.toLowerCase().includes(term)
+                  ? ''
+                  : 'none';
+            });
+          });
+        }
+      }
+    }
+  };
+})();
+</script>
+  
 <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js').catch(error=>console.error('Service worker registration failed:',error));});}</script>
 </body></html>
