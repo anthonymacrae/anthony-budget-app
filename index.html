@@ -829,10 +829,11 @@ localStorage.setItem(STORAGE,JSON.stringify(store));monthOptions();render();
       'display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 15px;';
 
     const filters = [
-      ['all','💷 All'],
-      ['outstanding','🔴 Outstanding'],
-      ['paid','🟢 Paid']
-    ];
+  ['all','📜 All'],
+  ['outstanding','🔴 Outstanding'],
+  ['partpaid','🟠 Part-paid'],
+  ['paid','🟢 Paid']
+];
 
     function updateButtons(){
       bar.querySelectorAll('button').forEach(function(button){
