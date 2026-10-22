@@ -908,6 +908,7 @@ localStorage.setItem(STORAGE,JSON.stringify(store));monthOptions();render();
         const matchesFilter =
           paymentFilter === 'all' ||
           (paymentFilter === 'paid' && isPaid) ||
+          (paymentFilter === 'partpaid' && !isPaid && paid > 0) ||
           (paymentFilter === 'outstanding' && !isPaid);
 
         card.style.display =
