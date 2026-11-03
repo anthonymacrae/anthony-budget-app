@@ -1,4 +1,4 @@
-const CACHE_NAME='work-family-calendar-v3';
+const CACHE_NAME='work-family-calendar-v4';
 const ASSETS=['./','./index.html','./manifest.json','./macrae-banner.jpg'];
 self.addEventListener('install',event=>{
   self.skipWaiting();
